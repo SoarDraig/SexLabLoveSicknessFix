@@ -1,83 +1,186 @@
+;================================================================================
+; lvskMain.psc - Love Sickness 核心逻辑脚本
+;================================================================================
+; 说明：
+;   这是 Love Sickness 模组的核心脚本，负责管理恋爱病的所有主要逻辑
+;   包括：恋爱病触发、亢奋系统、技能丢失、等级丢失等
+;================================================================================
+; 主要功能：
+;   1. 监听 SexLab 事件（性交开始/结束）
+;   2. 处理精液效果和恋爱病触发
+;   3. 管理亢奋值（Euphoria）系统
+;   4. 处理技能丢失和等级丢失
+;   5. 管理恋爱病持续时间
+;================================================================================
+
 Scriptname lvskMain extends Quest Conditional
 
-lvskMCM Property MCM auto
-Actor Property Player auto
-SexLabFramework Property SexLab auto
-ImageSpaceModifier Property FadeIn auto
-GlobalVariable Property GameDaysPassed auto
-GlobalVariable Property TimeScale auto
-GlobalVariable Property GlobalTest auto
-Spell Property LoveSickness auto
-Spell Property Hearts auto
-MagicEffect Property LoveSicknessEffect auto
-Perk Property PerkBarterBuy auto
-Perk Property PerkBarterSell auto
-Perk Property PerkIncomingDamage auto
-Perk Property PerkOutgoingDamage auto
-Perk Property PerkIntimidation auto
-Perk Property PerkMagicCost auto
-Perk Property PerkXP auto
+; ==================== 属性定义 ====================
+; 外部依赖和配置
+lvskMCM Property MCM auto              ; MCM 配置脚本引用
+Actor Property Player auto              ; 玩家角色引用
+SexLabFramework Property SexLab auto     ; SexLab 框架引用
+ImageSpaceModifier Property FadeIn auto  ; 屏幕淡入效果
+GlobalVariable Property GameDaysPassed auto  ; 游戏经过天数
+GlobalVariable Property TimeScale auto       ; 时间缩放因子
+GlobalVariable Property GlobalTest auto      ; 测试模式开关
 
-float Property Saturation auto
-int Property ResistanceLoss auto
-int Property PerkDebt auto
+; 恋爱病相关的魔法效果
+Spell Property LoveSickness auto       ; 恋爱病主动法术
+Spell Property Hearts auto             ; 爱心视觉效果法术
+MagicEffect Property LoveSicknessEffect auto ; 恋病魔法效果引用
 
-float Expiration; spell end time as game days passed
-float LastUpdate; last hourly update as game days passed
-string[] SkillList
-bool hasSLSO
+; 各种负面效果的 Perk
+Perk Property PerkBarterBuy auto       ; 买入价格加成
+Perk Property PerkBarterSell auto      ; 卖出价格加成
+Perk Property PerkIncomingDamage auto   ; 受到伤害加成
+Perk Property PerkOutgoingDamage auto   ; 输出伤害加成
+Perk Property PerkIntimidation auto     ; 威慑成功率加成
+Perk Property PerkMagicCost auto        ; 魔法消耗加成
+Perk Property PerkXP auto               ; 经验获取加成
 
+; ==================== 状态变量 ====================
+float Property Saturation auto          ; 亢奋值（0-100），越高越容易触发恋爱病
+int Property ResistanceLoss auto        ; 抵抗力损失（0-100），永久损失，值越高越容易触发恋爱病
+int Property PerkDebt auto              ; Perk点债务（因为等级丢失但没可用的perk点）
+
+; ==================== 内部变量 ====================
+float Expiration                        ; 恋爱病结束时间（以游戏天数表示）
+float LastUpdate                        ; 上次更新时间（以游戏天数表示，用于计算亢奋衰减）
+string[] SkillList                      ; 技能名称数组（18种技能）
+bool hasSLSO                            ; 是否安装了 SLSO（Separate Orgasms）模组
+
+;================================================================================
+; OnInit - 脚本初始化事件
+;================================================================================
+; 说明：
+;   当 Quest 启动时调用，执行初始化维护
+;================================================================================
 Event OnInit()
 	Maintenance()
 EndEvent
 
+;================================================================================
+; Maintenance - 维护函数
+;================================================================================
+; 说明：
+;   初始化模组，注册事件，设置技能列表，检测依赖模组
+;   在游戏加载时也会调用此函数
+;================================================================================
 Function Maintenance()
+	; 如果 Quest 未运行，直接返回
 	if !IsRunning()
 		return
 	endif
 
+	; 注册 SexLab 事件监听器
 	RegisterForEvents()
+	
+	; 初始化技能名称列表
 	InitSkillList()
+	
+	; 等待1秒确保其他模组加载完成
 	Utility.Wait(1)
+	
+	; 根据当前 MCM 设置更新恋爱病效果
 	SetEffects()
+	
+	; 检测是否安装了 SLSO 模组（支持独立的性高潮）
 	hasSLSO = (Quest.GetQuest("SLSO") != none)
 EndFunction
 
+;================================================================================
+; RegisterForEvents - 注册事件监听器
+;================================================================================
+; 说明：
+;   注册 SexLab 和自定义模组事件
+;
+; 事件说明：
+;   - PlayerOrgasmEnd: 玩家性高潮结束时触发
+;   - PlayerTrack_End: 性交场景结束时触发
+;   - LVSK_Boost: 自定义事件，用于其他模组添加亢奋值
+;================================================================================
 Function RegisterForEvents()
+	; 注册玩家性高潮结束事件
 	RegisterForModEvent("PlayerOrgasmEnd", "OnPlayerOrgasmStart")
-	RegisterForModEvent("PlayerTrack_End", "OnPlayerSexEnd"); was RegisterForModEvent("PlayerSex_End", "OnPlayerSexEnd")
+	
+	; 注册性交场景结束事件
+	; 注意：旧版本使用 "PlayerSex_End"，现在改用 "PlayerTrack_End"
+	RegisterForModEvent("PlayerTrack_End", "OnPlayerSexEnd")
+	
+	; 注册自定义 Boost 事件（供其他模组调用）
 	RegisterForModEvent("LVSK_Boost", "OnBoost")
 EndFunction
 
+;================================================================================
+; End - 停止模组
+;================================================================================
+; 说明：
+;   完全重置模组状态，移除所有效果
+;   通常在用户禁用模组时调用
+;================================================================================
 Function End()
+	; 重置亢奋值
 	Saturation = 0.0
 	StorageUtil.SetFloatValue(Player, "LVSK_Euphoria", Saturation)
+	
+	; 重置抵抗力损失
 	ResistanceLoss = 0
+	
+	; 重置过期时间
 	Expiration = 0.0
+	
+	; 取消游戏时间更新注册
 	UnRegisterForUpdateGameTime()
+	
+	; 移除恋爱病法术
 	Player.DispelSpell(LoveSickness)
+	
+	; 停止 Quest
 	Stop()
 EndFunction
 
+;================================================================================
+; OnUpdateGameTime - 游戏时间更新事件
+;================================================================================
+; 说明：
+;   每小时（游戏时间）调用一次，处理亢奋值的自然衰减
+;
+; 计算逻辑：
+;   - 计算经过的小时数
+;   - 根据配置的衰减率减少亢奋值
+;   - 更新存储的亢奋值
+;================================================================================
 Event OnUpdateGameTime()
+	; 计算自上次更新以来经过的游戏小时数
+	; +0.001 是为了防止浮点数精度问题导致的计算错误
 	int hoursPassed = Math.Floor((GameDaysPassed.GetValue() - LastUpdate + 0.001) * 24)
+	
+	; 更新最后更新时间
 	LastUpdate = GameDaysPassed.GetValue()
+	
+	; 根据经过的小时数和衰减率减少亢奋值
 	Saturation -= hoursPassed * MCM.SaturationDecay
+	
+	; 确保亢奋值不低于0
 	if Saturation < 0.0
 		Saturation = 0.0
 	endif
+	
+	; 更新存储的亢奋值（供其他脚本访问）
 	StorageUtil.SetFloatValue(Player, "LVSK_Euphoria", Saturation)
 EndEvent
 
-Event OnPlayerOrgasmStart(string eventName, string argString, float argNum, form sender)
-	if !IsRunning()
-		return
-	endif
-	
-	if MCM.WhenToUpdate == 0
-		HandleSex(SexLab.HookController(argString))
-	endif
-EndEvent
+;================================================================================
+; OnPlayerOrgasmStart - 玩家性高潮结束事件
+;================================================================================
+; 说明：
+;   当玩家性高潮结束时触发
+;   如果 MCM 设置为"在玩家高潮时更新"，则处理精液效果
+;
+; 参数：
+;   eventName: 事件名称
+;   argString: SexLab 线
 
 Event OnPlayerSexEnd(Form FormRef, int tid)
 	if !IsRunning()

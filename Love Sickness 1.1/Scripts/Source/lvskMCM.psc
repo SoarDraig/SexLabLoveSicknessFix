@@ -1,56 +1,31 @@
+;================================================================================
+; lvskMCM.psc - Love Sickness MCM 配置界面脚本
+;================================================================================
+; 说明：
+;   这是 Love Sickness 模组的 MCM（Mod Configuration Menu）配置界面脚本
+;   继承自 SKI_ConfigBase，提供完整的用户界面来配置模组所有参数
+;================================================================================
+; 主要功能：
+;   1. 创建三个配置页面：设置、技能影响、系统
+;   2. 提供各种控件：滑块、开关、菜单、按钮、文本
+;   3. 处理用户输入和状态管理
+;   4. 版本控制和升级逻辑
+;================================================================================
+
 Scriptname lvskMCM extends SKI_ConfigBase
 
-lvskMain Property MQ auto
-Actor Property Player auto
-Armor Property TavernClothes auto
+; ==================== 属性定义 ====================
+; 核心引用
+lvskMain Property MQ auto           ; 主脚本引用，用于调用核心功能
+Actor Property Player auto          ; 玩家角色引用
+Armor Property TavernClothes auto   ; 酒馆服装（默认工作服装）
 
-Armor Property WorkingClothes auto
-Faction Property ArousalFaction auto
+; 可配置属性
+Armor Property WorkingClothes auto   ; 工作服装（用于判断是否为妓女）
+Faction Property ArousalFaction auto  ; 性唤醒阵营（SexLab Aroused）
 
-bool Property SwallowOnNonRape auto
-bool Property SwallowOnRape auto
-bool Property SwallowWhenLovesick=true auto
-bool Property SwallowWhenWorking auto
-float Property SwallowArousal=60.0 auto
-int Property WhenToUpdate=0 auto
-int Property BaseChance=12 auto
-int Property ExtensionChance=50 auto
-int Property BaseDuration=8 auto
-int Property ExtensionDuration=6 auto
-int Property OverloadChance=50 auto
-int Property SaturationIncrement=4 auto
-int Property SaturationMinorIncrement=1 auto
-int Property SaturationDecay=1 auto
-int Property ResistanceIncrement=1 auto
-float Property VaginalFactor=1.0 auto
-float Property OralFactor=0.5 auto
-float Property AnalFactor=0.5 auto
-float Property ArousalFactor=0.25 auto
-float Property RapeFactor=2.0 auto
-float Property CreatureFactor=0.5 auto
-float Property IncomingDamage=1.0 auto
-float Property OutgoingDamage=0.5 auto
-float Property MagicCost=2.0 auto
-int Property StaminaReduction=100 auto
-float Property IntimidationFactor=0.1 auto
-float Property ExpFactor=0.75 auto
-float Property BarterFactor=1.25 auto
-int Property AlchemyReduction=25 auto
-int Property ThiefReduction=40 auto
-int Property SkillLossNumber=3 auto
-int Property SkillFloor=15 auto
-int Property SaturationReset=50 auto
-int Property TotalOverloads auto
-int Property TotalSkillsLost auto
-int Property TotalLevelsLost auto
-int Property DoFade auto
-int Property DoHearts auto
-bool Property ShowMessages=true auto
-bool Property NoSkillWeight auto
-bool Property AllowLevelLoss auto
-int Property StatLossOption auto
-float Property ShakeCamera=0.1 auto
-bool[] Property AffectedSkills auto
+; ==================== 精液吞咽配置 ====================
+bool
 
 int RepayButton
 int ReapplyButton
@@ -933,4 +908,4 @@ Function InitLists()
 	StatLossOptions[1] = "Health"
 	StatLossOptions[2] = "Magicka"
 	StatLossOptions[3] = "Stamina"
-EndFunction
+EndFunction	EndWhile
